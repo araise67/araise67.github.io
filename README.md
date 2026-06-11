@@ -1,1 +1,0 @@
-# araise67.github.io
