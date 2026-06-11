@@ -1,0 +1,1298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Valorant Lobby Rank Analyzer</title>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root{
+  --bg:#0a0b0d;--bg2:#111318;--bg3:#181b22;
+  --border:rgba(255,255,255,0.07);--border2:rgba(255,255,255,0.13);
+  --accent:#ff4654;--text:#e8eaf0;--muted:#6b7280;
+  --win:#22c55e;--loss:#ef4444;--draw:#f59e0b;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:var(--bg);color:var(--text);font-family:'Rajdhani',sans-serif;font-size:16px;min-height:100vh;}
+body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(rgba(255,70,84,0.03)1px,transparent 1px),linear-gradient(90deg,rgba(255,70,84,0.03)1px,transparent 1px);background-size:40px 40px;pointer-events:none;z-index:0;}
+.wrap{position:relative;z-index:1;max-width:960px;margin:0 auto;padding:2rem 1.5rem 5rem;}
+
+/* header */
+.tag-line{font-size:11px;letter-spacing:.2em;color:var(--accent);text-transform:uppercase;font-family:'JetBrains Mono',monospace;margin-bottom:8px;}
+h1{font-size:2.4rem;font-weight:700;line-height:1;}
+h1 span{color:var(--accent);}
+.sub{font-size:14px;color:var(--muted);margin-top:6px;font-family:'JetBrains Mono',monospace;}
+
+/* input section */
+.input-section{background:var(--bg2);border:.5px solid var(--border2);border-radius:10px;padding:1.5rem;margin-bottom:2rem;}
+.input-panel{display:none;}.manual-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px;}
+.manual-input{background:var(--bg);border:.5px solid var(--border2);border-radius:6px;padding:10px 14px;font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--fg);outline:none;transition:border-color .15s;}
+.manual-input:focus{border-color:var(--accent);}
+.manual-input.combined{flex:1;}
+.manual-select{background:var(--bg);border:.5px solid var(--border2);border-radius:6px;padding:10px 14px;font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--fg);outline:none;cursor:pointer;}
+.manual-select.region{min-width:80px;}
+.input-title{font-size:12px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:12px;}
+.input-row{display:flex;gap:8px;}
+.run-btn{background:var(--accent);border:none;border-radius:6px;padding:10px 22px;font-family:'Rajdhani',sans-serif;font-size:14px;font-weight:700;color:#fff;cursor:pointer;white-space:nowrap;transition:opacity .15s;letter-spacing:.05em;}
+.run-btn:hover{opacity:.85;}
+.run-btn:disabled{opacity:.35;cursor:default;}
+.parse-preview{margin-top:10px;font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--muted);min-height:18px;}
+.parse-preview .ok{color:#4ade80;}.parse-preview .err{color:#f87171;}.parse-preview span{color:var(--text);}
+.example-chip{display:inline-block;font-family:'JetBrains Mono',monospace;font-size:11px;background:var(--bg3);border:.5px solid var(--border2);border-radius:4px;padding:3px 8px;color:var(--muted);cursor:pointer;margin-top:8px;transition:all .15s;}
+.example-chip:hover{color:var(--accent);border-color:var(--accent);}
+
+/* status */
+#status-bar{display:flex;align-items:center;gap:10px;font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--muted);margin-bottom:.5rem;min-height:22px;}
+.spinner{width:13px;height:13px;border:2px solid rgba(255,70,84,.2);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;flex-shrink:0;}
+@keyframes spin{to{transform:rotate(360deg);}}
+.progress-wrap{height:2px;background:rgba(255,70,84,.1);border-radius:2px;margin-bottom:1.5rem;overflow:hidden;}
+.progress-fill{height:100%;background:var(--accent);border-radius:2px;width:0%;transition:width .4s;}
+
+/* summary cards */
+.summary-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:2rem;}
+.s-card.wide{grid-column:span 2;} @media(max-width:640px){.summary-grid{grid-template-columns:1fr 1fr;} .s-card.wide{grid-column:span 2;}}
+.s-card{background:var(--bg2);border:.5px solid var(--border2);border-radius:8px;padding:1rem 1.2rem;position:relative;overflow:visible;}
+.s-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--accent);opacity:.55;}
+.s-label{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:5px;}
+.s-value{font-size:1.5rem;font-weight:700;line-height:1.1;word-break:break-word;} .s-value.small{font-size:1.1rem;}
+.s-sub{font-size:12px;color:var(--muted);margin-top:4px;font-family:'JetBrains Mono',monospace;}
+.rank-breakdown{display:flex;flex-wrap:wrap;gap:5px;margin-top:10px;}
+.rb-item{display:flex;align-items:center;gap:5px;font-size:11px;font-family:'JetBrains Mono',monospace;color:var(--muted);background:rgba(255,255,255,.04);border-radius:4px;padding:3px 7px;}
+.rb-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+.rb-count{font-weight:700;color:var(--fg);}
+
+/* charts section */
+.charts-section{margin-bottom:2rem;}
+.chart-container{background:var(--bg2);border:.5px solid var(--border);border-radius:8px;padding:1.5rem;margin-bottom:12px;}
+.chart-heading{font-size:15px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--fg);margin-bottom:10px;}
+.chart-subheading{font-size:11px;color:var(--muted);font-family:'JetBrains Mono',monospace;margin-bottom:16px;}
+.chart-canvas-wrap{position:relative;height:320px;}
+
+/* match list */
+.section-title{font-size:13px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:12px;}
+.teammates-section{margin-bottom:2rem;}
+.teammate-list{display:flex;flex-direction:column;gap:8px;}
+.teammate-row{display:grid;grid-template-columns:24px 1fr auto auto auto;align-items:center;gap:12px;background:var(--bg2);border:.5px solid var(--border2);border-radius:8px;padding:10px 16px;}
+.tm-rank{font-size:11px;font-family:'JetBrains Mono',monospace;color:var(--muted);}
+.tm-name{font-size:14px;font-weight:700;font-family:'Rajdhani',sans-serif;color:var(--fg);}
+.tm-tag{font-size:11px;color:var(--muted);font-family:'JetBrains Mono',monospace;margin-left:2px;}
+.tm-stat{text-align:right;}
+.tm-stat-val{font-size:14px;font-weight:700;font-family:'JetBrains Mono',monospace;color:var(--fg);}
+.tm-stat-lbl{font-size:10px;color:var(--muted);letter-spacing:.05em;text-transform:uppercase;}
+.tm-kd-good{color:#22c55e;}.tm-kd-bad{color:#ef4444;}.tm-kd-mid{color:#9ca3af;}
+.filter-bar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;align-items:center;}
+.filter-group{display:flex;gap:6px;flex-wrap:wrap;align-items:center;}
+.filter-sep{width:1px;height:20px;background:var(--border2);margin:0 4px;}
+.filter-label{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);font-family:'JetBrains Mono',monospace;white-space:nowrap;}
+.filter-btn{background:var(--bg2);border:.5px solid var(--border2);border-radius:4px;padding:5px 14px;font-family:'Rajdhani',sans-serif;font-size:13px;font-weight:600;color:var(--muted);cursor:pointer;letter-spacing:.05em;text-transform:uppercase;transition:all .15s;}
+.filter-btn:hover{color:var(--text);background:var(--bg3);}
+.filter-btn.active{color:var(--accent);border-color:var(--accent);background:rgba(255,70,84,.08);}
+.matches{display:flex;flex-direction:column;gap:8px;}
+.match-card{background:var(--bg2);border:.5px solid var(--border);border-radius:8px;padding:12px 16px;cursor:pointer;transition:border-color .15s,background .15s;}
+.match-card:hover{border-color:var(--border2);background:var(--bg3);}
+.match-card.expanded{border-color:rgba(255,70,84,.3);}
+.match-row{display:flex;align-items:center;gap:10px;}
+.result-bar{width:3px;height:44px;border-radius:2px;flex-shrink:0;}
+.result-bar.win{background:var(--win);}.result-bar.loss{background:var(--loss);}.result-bar.draw{background:var(--draw);}
+.match-map{font-size:.95rem;font-weight:700;min-width:80px;}
+.match-score{font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--muted);min-width:46px;}
+.match-date{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted);flex:1;}
+.m-result-tag{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:2px 7px;border-radius:3px;flex-shrink:0;}
+.m-result-tag.win{background:rgba(34,197,94,.13);color:var(--win);}
+.m-result-tag.loss{background:rgba(239,68,68,.13);color:var(--loss);}
+.m-result-tag.draw{background:rgba(245,158,11,.13);color:var(--draw);}
+.m-badges{display:flex;gap:6px;flex-shrink:0;}
+.m-badge{background:var(--bg3);border:.5px solid var(--border2);border-radius:4px;padding:3px 8px;text-align:center;min-width:76px;}
+.m-badge-lbl{font-size:10px;color:var(--muted);font-family:'JetBrains Mono',monospace;}
+.m-badge-val{font-size:13px;font-weight:700;}
+.my-stats-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;padding-top:10px;border-top:.5px solid var(--border);}
+.my-stat{background:var(--bg);border-radius:4px;padding:4px 10px;font-family:'JetBrains Mono',monospace;font-size:12px;text-align:center;}
+.my-stat-lbl{color:var(--muted);font-size:10px;}
+.my-stat-val{color:var(--text);font-weight:500;}
+.players-grid{display:none;margin-top:10px;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:5px;}
+.match-card.expanded .players-grid{display:grid;}
+.player-row{display:flex;align-items:center;justify-content:space-between;background:var(--bg);border-radius:4px;padding:4px 10px;font-size:12px;}
+.player-row.is-me{background:rgba(255,70,84,.08);border:.5px solid rgba(255,70,84,.22);}
+.player-name{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:120px;}
+.player-rank-txt{font-family:'JetBrains Mono',monospace;font-size:11px;}
+.r-unr{color:#6b7280}.r-iron{color:#7a7a7e}.r-bronze{color:#b07428}.r-silver{color:#c2c8cf}
+.r-gold{color:#e8a820}.r-plat{color:#36b5c0}.r-diamond{color:#c07de0}.r-asc{color:#2db87a}
+.r-imm{color:#d03248}.r-rad{color:#f0e0b0}
+.error-box{background:rgba(239,68,68,.1);border:.5px solid rgba(239,68,68,.3);border-radius:8px;padding:1.2rem;font-family:'JetBrains Mono',monospace;font-size:13px;color:#fca5a5;line-height:1.8;}
+.empty{text-align:center;padding:3rem;color:var(--muted);font-family:'JetBrains Mono',monospace;font-size:13px;}
+.page-nav{display:flex;align-items:center;justify-content:center;gap:12px;margin-top:1.5rem;}
+.page-btn{background:var(--bg2);border:.5px solid var(--border2);border-radius:4px;padding:6px 16px;font-family:'Rajdhani',sans-serif;font-size:14px;font-weight:600;color:var(--text);cursor:pointer;transition:all .15s;}
+.page-btn:hover:not(:disabled){background:var(--bg3);border-color:var(--accent);color:var(--accent);}
+.page-btn:disabled{opacity:.3;cursor:default;}
+.page-info{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--muted);}
+.page-jump{display:flex;align-items:center;gap:6px;font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--muted);}
+.page-jump-input{width:44px;background:var(--bg);border:.5px solid var(--border2);border-radius:4px;padding:4px 6px;font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--fg);text-align:center;outline:none;}
+.page-jump-input:focus{border-color:var(--accent);}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header style="margin-bottom:2rem">
+    <div class="tag-line">Valorant · Competitive · Lobby Rank Analyzer</div>
+    <h1>VALO <span>LOBBY</span> RANKS</h1>
+    <div class="sub">enter a player name and tag to analyze</div>
+  </header>
+
+  <div class="input-section">
+    <div class="manual-row">
+      <input class="manual-input combined" id="m-nametag" type="text" placeholder="araise#NRG"
+        oninput="onManualInput()" onkeydown="if(event.key==='Enter')runAnalysis()"/>
+      <select class="manual-select" id="m-season" onchange="onManualInput()">
+        <option value="">All seasons</option>
+      </select>
+    </div>
+    <div class="parse-preview" id="parse-preview-manual">Enter a player name and tag above</div>
+
+    <div style="margin-top:12px;display:flex;align-items:center;gap:10px;">
+      <button class="run-btn" id="run-btn" onclick="runAnalysis()" disabled>Analyze</button>
+    </div>
+  </div>
+
+  <div id="results-section" style="display:none">
+    <div style="margin-bottom:1.5rem">
+      <div class="tag-line" id="profile-tagline">—</div>
+      <div style="font-size:1.4rem;font-weight:700" id="profile-name">—</div>
+    </div>
+
+    <div id="status-bar"><div class="spinner" id="spinner"></div><span id="status-text"></span></div>
+    <div class="progress-wrap"><div class="progress-fill" id="progress-fill"></div></div>
+
+    <div class="summary-grid" id="summary-grid" style="display:none">
+      <div class="s-card"><div class="s-label">Games</div><div class="s-value" id="sg-games">—</div><div class="s-sub">competitive</div></div>
+      <div class="s-card wide"><div class="s-label">Avg lobby rank</div><div class="s-value" id="sg-avg-rank">—</div><div class="s-sub" id="sg-avg-rank-sub">&nbsp;</div><div class="rank-breakdown" id="sg-rank-breakdown"></div></div>
+      <div class="s-card"><div class="s-label">Avg K/D</div><div class="s-value" id="sg-kd">—</div><div class="s-sub" id="sg-kd-sub">&nbsp;</div></div>
+      <div class="s-card"><div class="s-label">Peak Rank</div><div class="s-value" id="sg-peakrr">—</div><div class="s-sub" id="sg-peakrr-sub">this act</div></div>
+    </div>
+
+    <!-- kd by rank chart -->
+    <div class="charts-section" id="charts-section" style="display:none">
+      <div id="charts-container"></div>
+    </div>
+
+    <div class="teammates-section" id="teammates-section" style="display:none">
+      <div class="section-title">Most Played With</div>
+      <div class="teammate-list" id="teammate-list"></div>
+    </div>
+
+    <!-- match list -->
+    <div id="match-list-section" style="display:none">
+      <div class="section-title">Match History</div>
+      <div class="filter-bar" id="filter-bar">
+        <div class="filter-group">
+          <span class="filter-label">Result</span>
+          <button class="filter-btn active" onclick="setResultFilter('all',event)">All</button>
+          <button class="filter-btn" onclick="setResultFilter('win',event)">Wins</button>
+          <button class="filter-btn" onclick="setResultFilter('loss',event)">Losses</button>
+        </div>
+        <div class="filter-sep"></div>
+        <div class="filter-group" id="rank-filter-group">
+          <span class="filter-label">Rank</span>
+        </div>
+        <div class="filter-sep"></div>
+        <div class="filter-group" id="party-filter-group">
+          <span class="filter-label">Party</span>
+        </div>
+      </div>
+      <div id="matches-container"></div>
+      <div class="page-nav" id="page-nav" style="display:none">
+        <button class="page-btn" id="btn-prev" onclick="changePage(-1)">← Prev</button>
+        <span class="page-info" id="page-info"></span>
+        <button class="page-btn" id="btn-next" onclick="changePage(1)">Next →</button>
+        <div class="page-jump">
+          <span>Go to</span>
+          <input class="page-jump-input" id="page-jump-input" type="number" min="1"
+            onkeydown="if(event.key==='Enter')jumpToPage(this.value)"
+            onblur="jumpToPage(this.value)"/>
+        </div>
+      </div>
+    </div>
+
+    <div id="error-container"></div>
+  </div>
+</div>
+
+<script>
+const API_KEY   = 'HDEV-b9d429dd-13aa-48f9-b0a9-a9d197f7c4f6';
+const BATCH     = 10;
+const PER_PAGE  = 15;
+const DELAY_MS  = 1100;
+
+/* ── SEASON MAP ─────────────────────────────────────────── */
+const SEASON_NAMES = {
+  '3f61c772-4560-cd3f-5d3f-a7ab5abda6b3':'E1A1','0530b9c4-4980-f2ee-df5d-09864cd00542':'E1A2','46ea6166-4573-1128-9cea-60a15640059b':'E1A3',
+  '97b6e739-44cc-ffa7-49ad-398ba502ceb0':'E2A1','ab57ef51-4e59-da91-cc8d-51a5a2b9b8ff':'E2A2','52e9749a-429b-7060-99fe-4595426a0cf7':'E2A3',
+  '2a27e5d2-4d30-c9e2-b15a-93b8909a442c':'E3A1','4cb622e1-4244-6da3-7276-8daaf1c01be2':'E3A2','a16955a5-4ad0-f761-5e9e-389df1c892fb':'E3A3',
+  '573f53ac-41a5-3a7d-d9ce-d6a6298e5704':'E4A1','d929bc38-4ab6-7da4-94f0-ee84f8ac141e':'E4A2','3e47230a-463c-a301-eb7d-67bb60357d4f':'E4A3',
+  '67e373c7-48f7-b422-641b-079ace30b427':'E5A1','7a85de9a-4032-61a9-61d8-f4aa2b4a84b6':'E5A2','aca29595-40e4-01f5-3f35-b1b3d304c96e':'E5A3',
+  '9c91a445-4f78-1baa-a3ea-8f8aadf4914d':'E6A1','34093c29-4306-43de-452f-3f944bde22be':'E6A2','2de5423b-4aad-02ad-8d9b-c0a931958861':'E6A3',
+  '0981a882-4e7d-371a-70c4-c3b4f46c504a':'E7A1','03dfd004-45d4-ebfd-ab0a-948ce780dac4':'E7A2','4401f9fd-4170-2e4c-4bc3-f3b4d7d150d1':'E7A3',
+  'ec876e6c-43e8-fa63-ffc1-2e8d4db25525':'E8A1','22d10d66-4d2a-a340-6c54-408c7bd53807':'E8A2','4539cac3-47ae-90e5-3d01-b3812ca3274e':'E8A3',
+  '52ca6698-41c1-e7de-4008-8994d2221209':'E9A1','292f58db-4c17-89a7-b1c0-ba988f0e9d98':'E9A2','dcde7346-4085-de4f-c463-2489ed47983b':'E9A3',
+  '476b0893-4c2e-abd6-c5fe-708facff0772':'V25A1','16118998-4705-5813-86dd-0292a2439d90':'V25A2','aef237a0-494d-3a14-a1c8-ec8de84e309c':'V25A3',
+  'ac12e9b3-47e6-9599-8fa1-0bb473e5efc7':'V25A4','5adc33fa-4f30-2899-f131-6fba64c5dd3a':'V25A5','4c4b8cff-43eb-13d3-8f14-96b783c90cd2':'V25A6',
+  '3ea2b318-423b-cf86-25da-7cbb0eefbe2d':'V26A1','9d85c932-4820-c060-09c3-668636d4df1b':'V26A2',
+  'ce2783e8-44fc-dd48-3da3-33b5ba6c4a22':'V26A3',
+};
+function getActName(uuid){return uuid?SEASON_NAMES[uuid.toLowerCase()]||null:null;}
+
+/* ── RANK MAP ────────────────────────────────────────────── */
+const RANK_MAP={
+  0:'Unranked',1:'Unranked',2:'Unranked',
+  3:'Iron 1',4:'Iron 2',5:'Iron 3',
+  6:'Bronze 1',7:'Bronze 2',8:'Bronze 3',
+  9:'Silver 1',10:'Silver 2',11:'Silver 3',
+  12:'Gold 1',13:'Gold 2',14:'Gold 3',
+  15:'Plat 1',16:'Plat 2',17:'Plat 3',
+  18:'Diamond 1',19:'Diamond 2',20:'Diamond 3',
+  21:'Asc 1',22:'Asc 2',23:'Asc 3',
+  24:'Imm 1',25:'Imm 2',26:'Imm 3',
+  27:'Radiant'
+};
+function rName(n){return RANK_MAP[n]||'Unranked';}
+
+const RANK_COLORS={
+  0:'#6b7280',1:'#6b7280',2:'#6b7280',
+  3:'#7a7a7e',4:'#7a7a7e',5:'#7a7a7e',
+  6:'#b07428',7:'#b07428',8:'#b07428',
+  9:'#c2c8cf',10:'#c2c8cf',11:'#c2c8cf',
+  12:'#e8a820',13:'#e8a820',14:'#e8a820',
+  15:'#36b5c0',16:'#36b5c0',17:'#36b5c0',
+  18:'#c07de0',19:'#c07de0',20:'#c07de0',
+  21:'#2db87a',22:'#2db87a',23:'#2db87a',
+  24:'#d03248',25:'#d03248',26:'#d03248',
+  27:'#f0e0b0',
+};
+function rColor(n){return RANK_COLORS[n]||'#6b7280';}
+function avgLabel(a){return RANK_MAP[Math.round(a)]||'—';}
+function rClass(n){
+  if(n<=2)return 'r-unr';if(n<=5)return 'r-iron';if(n<=8)return 'r-bronze';
+  if(n<=11)return 'r-silver';if(n<=14)return 'r-gold';if(n<=17)return 'r-plat';
+  if(n<=20)return 'r-diamond';if(n<=23)return 'r-asc';if(n<=26)return 'r-imm';
+  return 'r-rad';
+}
+
+/* ── STATE ──────────────────────────────────────────────── */
+let PLAYER='',TAG='',REGION='eu',PLATFORM='pc',TARGET_SEASON='',PUUID='';
+let allMatches=[],activeFilter='all',activeRankFilter=null,activePartyFilter=null,page=0;
+const chartInstances={};
+
+
+
+populateSeasonDropdown();
+function populateSeasonDropdown(){
+  const sel=document.getElementById('m-season');
+  if(sel.options.length>1)return; // already populated
+  // Add seasons newest first
+  const entries=Object.entries(SEASON_NAMES).reverse();
+  entries.forEach(([uuid,label])=>{
+    const opt=document.createElement('option');
+    opt.value=uuid;opt.textContent=label;
+    sel.appendChild(opt);
+  });
+}
+
+function onManualInput(){
+  const raw=document.getElementById('m-nametag').value.trim();
+  const btn=document.getElementById('run-btn');
+  const preview=document.getElementById('parse-preview-manual');
+  const hi=raw.lastIndexOf('#');
+  if(hi<1||hi===raw.length-1){
+    preview.innerHTML='Enter name#TAG — e.g. araise#NRG';
+    btn.disabled=true;return;
+  }
+  const name=raw.slice(0,hi);
+  const tag=raw.slice(hi+1);
+  const season=document.getElementById('m-season').value;
+  const seasonLabel=season?(SEASON_NAMES[season]||season.slice(0,8)+'…'):'All seasons';
+  preview.innerHTML=`<span class="ok">✓</span> &nbsp;Player: <span>${name}#${tag}</span> &nbsp;·&nbsp; Season: <span style="color:var(--accent)">${seasonLabel}</span> &nbsp;·&nbsp; <span style="color:var(--muted);font-size:11px">region auto-detected</span>`;
+  btn.disabled=false;
+}
+
+
+
+
+function runAnalysis(){
+  let playerName,playerTag,playerRegion,playerPlatform,playerSeason;
+  const rawNT=document.getElementById('m-nametag').value.trim();
+  const hiNT=rawNT.lastIndexOf('#');
+  if(hiNT<1||hiNT===rawNT.length-1)return;
+  playerName=rawNT.slice(0,hiNT);
+  playerTag=rawNT.slice(hiNT+1);
+  playerRegion='eu'; // overridden by account lookup
+  playerPlatform='pc';
+  playerSeason=document.getElementById('m-season').value;
+  PLAYER=playerName;TAG=playerTag;REGION=playerRegion;PLATFORM=playerPlatform;TARGET_SEASON=playerSeason;PUUID='';
+  document.getElementById('results-section').style.display='block';
+  document.getElementById('profile-tagline').textContent=
+    `${TARGET_SEASON?(getActName(TARGET_SEASON)||TARGET_SEASON.slice(0,8)+'…'):'All seasons'} · ${PLATFORM.toUpperCase()}`;
+  document.getElementById('profile-name').textContent=`${PLAYER}#${TAG}`;
+  // Reset UI
+  ['summary-grid','charts-section','teammates-section','match-list-section'].forEach(id=>{
+    document.getElementById(id).style.display='none';
+  });
+  document.getElementById('matches-container').innerHTML='';
+  document.getElementById('error-container').innerHTML='';
+  document.getElementById('page-nav').style.display='none';
+  allMatches=[];page=0;activeFilter='all';activeRankFilter=null;activePartyFilter=null;
+  document.querySelectorAll('.filter-btn').forEach((b,i)=>b.classList.toggle('active',i===0));
+  document.getElementById('run-btn').disabled=true;
+  document.getElementById('results-section').scrollIntoView({behavior:'smooth',block:'start'});
+  loadAll();
+}
+
+/* ── API ─────────────────────────────────────────────────── */
+function sleep(ms){return new Promise(r=>setTimeout(r,ms));}
+
+async function fetchWithRetry(url,_attempt=0){
+  const MAX_RETRIES=4;
+  const RETRYABLE=[429,500,502,503,504,0]; // 0 = network error (CORS on 5xx, offline)
+  try{
+    const r=await fetch(url,{headers:{Authorization:API_KEY}});
+    if(r.status===429){
+      const wait=Math.max(parseInt(r.headers.get('retry-after')||'5'),5)*1000;
+      setStatus(`Rate limited — waiting ${Math.ceil(wait/1000)}s…`,true);
+      await sleep(wait);
+      return fetchWithRetry(url,_attempt);
+    }
+    if(RETRYABLE.includes(r.status)){
+      if(_attempt>=MAX_RETRIES)throw new Error(`API ${r.status}: server error after ${MAX_RETRIES} retries`);
+      const wait=Math.min(1000*Math.pow(2,_attempt),16000); // 1s,2s,4s,8s,16s
+      setStatus(`Server error (${r.status}) — retrying in ${Math.ceil(wait/1000)}s… (${_attempt+1}/${MAX_RETRIES})`,true);
+      await sleep(wait);
+      return fetchWithRetry(url,_attempt+1);
+    }
+    if(!r.ok)throw new Error(`API ${r.status}: ${(await r.text()).slice(0,200)}`);
+    const j=await r.json();
+    const rem=r.headers.get('x-ratelimit-remaining');
+    return{j,rem:rem!=null?parseInt(rem):null};
+  }catch(e){
+    // NetworkError = fetch() itself threw (e.g. CORS blocked on a 504 with no headers)
+    if(e.name==='TypeError'||e.message?.includes('NetworkError')||e.message?.includes('fetch')){
+      if(_attempt>=MAX_RETRIES)throw new Error(`Network error after ${MAX_RETRIES} retries — check your connection`);
+      const wait=Math.min(1500*Math.pow(2,_attempt),20000);
+      setStatus(`Network error — retrying in ${Math.ceil(wait/1000)}s… (${_attempt+1}/${MAX_RETRIES})`,true);
+      await sleep(wait);
+      return fetchWithRetry(url,_attempt+1);
+    }
+    throw e; // non-retryable error, bubble up
+  }
+}
+
+function isSeason(m){
+  if(!TARGET_SEASON)return true;
+  const sid=m.metadata?.season?.id||m.metadata?.season_id||'';
+  return sid===TARGET_SEASON||sid.includes(TARGET_SEASON.slice(0,8));
+}
+/* ── PROCESS MATCH ──────────────────────────────────────── */
+function processMatch(m){
+  const meta=m.metadata||{};
+  const players=m.players||[];
+
+  // Prefer PUUID lookup (works across name changes); fall back to name+tag
+  const me=players.find(p=>PUUID?p.puuid===PUUID:
+    p.name?.toLowerCase().trim()===PLAYER.toLowerCase().trim()&&p.tag?.toLowerCase().trim()===TAG.toLowerCase().trim()
+  );
+  const myTeamId=me?.team_id?.toLowerCase();
+
+  let won=undefined, myR=undefined, opR=undefined;
+
+  const teamsRaw=m.teams;
+  if(Array.isArray(teamsRaw)){
+    const myT=teamsRaw.find(t=>t.team_id?.toLowerCase()===myTeamId);
+    const opT=teamsRaw.find(t=>t.team_id?.toLowerCase()!==myTeamId);
+    myR=myT?.rounds?.won??myT?.rounds_won;
+    opR=opT?.rounds?.won??opT?.rounds_won;
+  } else if(teamsRaw&&typeof teamsRaw==='object'){
+    const myT=myTeamId?teamsRaw[myTeamId]:null;
+    const opTeamId=myTeamId==='red'?'blue':'red';
+    const opT=teamsRaw[opTeamId]||null;
+    if(typeof myT==='number'){
+      myR=myT;
+      opR=typeof opT==='number'?opT:null;
+    } else if(myT&&typeof myT==='object'){
+      myR=myT.rounds_won??myT.rounds?.won;
+      opR=opT?.rounds_won??opT?.rounds?.won;
+    }
+  }
+
+  // Always derive won from round counts — API's won field is unreliable for draws
+  if(myR!=null&&opR!=null){
+    if(myR>opR) won=true;
+    else if(myR<opR) won=false;
+    else won=undefined; // genuine draw (14-14, 15-15 overtime tie)
+  }
+  const mapName=meta.map?.name||meta.map||'Unknown';
+  const startedAt=meta.started_at
+    ?new Date(meta.started_at).toLocaleDateString('en-GB',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})
+    :meta.game_start
+      ?new Date(meta.game_start*1000).toLocaleDateString('en-GB',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})
+      :'';
+
+  // Avg lobby rank
+  const rankNums=players.map(p=>p.tier?.id??p.currenttier??0).filter(n=>n>=3);
+  const avgRank=rankNums.length?rankNums.reduce((a,b)=>a+b,0)/rankNums.length:null;
+
+  // My stats — v4 player object fields
+  const myStats=me?extractStats(me):null;
+
+  // All players with tier
+  const playersOut=players.map(p=>({
+    name:p.name,tag:p.tag,puuid:p.puuid,
+    team_id:p.team_id?.toLowerCase(),
+    party_id:p.party_id??null,
+    _tier:p.tier?.id??p.currenttier??0,
+    _label:p.tier?.patched??p.currenttier_patched??rName(p.tier?.id??p.currenttier??0),
+    _kills:p.stats?.kills??0,
+    _deaths:p.stats?.deaths??0,
+  }));
+
+  // Party size — count teammates sharing the same party_id as me
+  const myPartyId=me?.party_id??null;
+  const myTeamPlayers=players.filter(p=>p.team_id?.toLowerCase()===myTeamId);
+  const partySize=myPartyId
+    ? myTeamPlayers.filter(p=>p.party_id===myPartyId).length
+    : 1;
+
+  // My tier and RR for this match — used to derive peak rank
+  const myTierId=me?.tier?.id??me?.currenttier??0;
+  const myTierName=me?.tier?.patched??me?.currenttier_patched??rName(myTierId);
+  // v4 match player object uses `rr`; v3 used `ranking_in_tier` — check both
+  const myRR=null; // v4 match endpoint doesn't include per-match RR — fetched separately via mmr-history
+  return{mapName,startedAt,won,myR,opR,avgRank,myStats,players:playersOut,myTierId,myTierName,myRR,partySize,myPartyId};
+}
+
+function extractStats(p){
+  // v4 stats nested under p.stats, v3 flat
+  const s=p.stats||p;
+  // Use null as sentinel so we can detect missing data vs a genuine 0
+  const kills=s.kills??null;
+  const deaths=s.deaths??null;
+  // If both kills and deaths are absent, we have no real stats — signal the caller
+  if(kills===null&&deaths===null)return null;
+  const k=kills??0;
+  const d=deaths??0;
+  const assists=s.assists??0;
+  const score=s.score??s.combat_score??0;
+  const rounds_played=s.rounds_played??s.roundsPlayed??null;
+  const dmg=p.damage_made??s.damage?.made??s.damage_made??null;
+  const hs=p.headshots??s.headshots??s.shots?.head??null;
+  const bs=p.bodyshots??s.bodyshots??s.shots?.body??null;
+  const ls=p.legshots??s.legshots??s.shots?.leg??null;
+  const totalShots=(hs??0)+(bs??0)+(ls??0);
+  const hsPct=totalShots>0?Math.round((hs??0)/totalShots*100):null;
+
+  // ACS = combat score / rounds; if no rounds_played we can't compute it
+  const acs=rounds_played&&rounds_played>0?Math.round(score/rounds_played):null;
+  // KD: null means unknown (no data), not 0
+  const kd=d>0?Math.round((k/d)*100)/100:k>0?k:null;
+  const adr=rounds_played&&rounds_played>0&&dmg!==null?Math.round(dmg/rounds_played):null;
+
+  return{kills:k,deaths:d,assists,score,kd,acs,adr,hsPct,dmg};
+}
+
+/* ── LOAD ─────────────────────────────────────────────────── */
+async function loadAll(){
+  setProgress(3);
+  try{
+    // Step 0: resolve PUUID so we can find the player in historical matches
+    // regardless of name changes over time
+    setStatus('Resolving player…',true);
+    try{
+      const acctUrl=`https://api.henrikdev.xyz/valorant/v1/account/${encodeURIComponent(PLAYER)}/${TAG}`;
+      const{j:acctJ}=await fetchWithRetry(acctUrl);
+      const acctData=acctJ.data||acctJ;
+      PUUID=acctData.puuid||'';
+      if(acctData.region){
+        REGION=acctData.region.toLowerCase();
+        // Update the preview to show the actual detected region
+        const prev=document.getElementById('parse-preview-manual');
+        if(prev)prev.innerHTML=prev.innerHTML.replace(
+          '<span style="color:var(--muted);font-size:11px">region auto-detected</span>',
+          `Region: <span style="color:var(--accent)">${REGION.toUpperCase()}</span>`
+        );
+      }
+    }catch(_){
+      // If account lookup fails, fall back to name+tag matching
+    }
+
+    // Step 1: fetch v3/mmr to get the exact game count AND compute the start offset
+    // by summing games from all acts newer than the target — so we jump straight to it
+    let targetCount=null;
+    let start=0;
+    if(TARGET_SEASON){
+      setStatus('Fetching act stats…',true);
+      try{
+        const mmrUrl=`https://api.henrikdev.xyz/valorant/v3/mmr/${REGION}/${PLATFORM}/${encodeURIComponent(PLAYER)}/${TAG}`;
+        const{j:mmrJ}=await fetchWithRetry(mmrUrl);
+        const seasonal=(mmrJ.data||mmrJ).seasonal||[];
+        const actEntry=seasonal.find(s=>s.season?.id===TARGET_SEASON);
+        if(actEntry?.games){
+          targetCount=actEntry.games;
+          // Season UUIDs in SEASON_NAMES are ordered oldest→newest
+          // Sum games from all acts with a higher index (newer) to get the skip offset
+          const seasonOrder=Object.keys(SEASON_NAMES);
+          const targetIdx=seasonOrder.indexOf(TARGET_SEASON);
+          const skipGames=seasonal
+            .filter(s=>seasonOrder.indexOf(s.season?.id)>targetIdx)
+            .reduce((sum,s)=>sum+(s.games||0),0);
+          // Round down to nearest batch boundary so we don't overshoot
+          // Subtract a small buffer so we never miss games at the season boundary
+          start=Math.max(0,skipGames-20);
+          console.log(`[mmr] targetCount=${targetCount} skipGames=${skipGames} startOffset=${start}`);
+          setStatus(`Act has ${targetCount} games — jumping to offset ${start}…`,true);
+        }
+      }catch(_){
+        // mmr fetch failed — start from 0 and fall back to boundary detection
+      }
+    }
+
+    // Step 2: paginate match history, stopping when we hit targetCount
+    let collected=[];
+
+    while(true){
+      // Update status and progress bar together from the same value so they stay in sync
+      const pct=targetCount?Math.round(collected.length/targetCount*100):null;
+      setStatus(`Fetching matches ${start+1}–${start+BATCH} · ${collected.length}${targetCount?'/'+targetCount:''} found${pct?' ('+pct+'%)':''}…`,true);
+      setProgress(targetCount
+        ?Math.min(5+collected.length/targetCount*90,95)
+        :Math.min(10+start/4,85));
+
+      const url=`https://api.henrikdev.xyz/valorant/v4/matches/${REGION}/${PLATFORM}/${encodeURIComponent(PLAYER)}/${TAG}?mode=competitive&size=${BATCH}&start=${start}`;
+      const{j,rem}=await fetchWithRetry(url);
+      const data=j.data||[];
+      if(!data.length)break;
+
+      const onPage=TARGET_SEASON?data.filter(m=>isSeason(m)):data;
+      onPage.forEach(m=>collected.push(m));
+
+      // End of history
+      if(data.length<BATCH)break;
+      // Scrolled past the season — full batch with zero matching games
+      if(TARGET_SEASON&&collected.length>0&&onPage.length===0)break;
+
+      start+=BATCH;
+      const delay=rem!==null&&rem<=2?3000:DELAY_MS;
+      await sleep(delay);
+    }
+
+    // Deduplicate by match_id
+    const seen=new Set();
+    const deduped=collected.filter(m=>{
+      const id=m.metadata?.match_id||m.match_id||'';
+      if(!id||seen.has(id))return false;
+      seen.add(id);return true;
+    });
+    allMatches=deduped.map(processMatch);
+    setProgress(100);
+    setTimeout(()=>setProgress(0),600);
+    renderAll();
+  }catch(e){
+    setStatus('');
+    document.getElementById('error-container').innerHTML=
+      `<div class="error-box">Error: ${e.message}<br><br>Check browser console (F12) for details.</div>`;
+  }finally{
+    document.getElementById('run-btn').disabled=false;
+  }
+}
+
+/* ── RENDER ALL ──────────────────────────────────────────── */
+function renderAll(){
+  const n=allMatches.length;
+  if(!n){setStatus('No matches found for this season.');return;}
+
+  const avgs=allMatches.map(m=>m.avgRank).filter(Boolean);
+  const overall=avgs.reduce((a,b)=>a+b,0)/avgs.length;
+
+  // Sum raw kills and deaths across all games for an accurate overall K/D
+  const statGames=allMatches.filter(m=>m.myStats&&m.myStats.kills!=null&&m.myStats.deaths!=null);
+  const totalKills=statGames.reduce((a,m)=>a+m.myStats.kills,0);
+  const totalDeaths=statGames.reduce((a,m)=>a+m.myStats.deaths,0);
+  const avgKD=statGames.length?(totalDeaths>0?+(totalKills/totalDeaths).toFixed(2):totalKills):null;
+
+  document.getElementById('sg-games').textContent=n;
+  document.getElementById('sg-avg-rank').textContent=avgLabel(overall);
+
+  // Rank breakdown — per sub-rank (Asc 1, Asc 2, Imm 1 etc.)
+  // Using global RANK_COLORS
+  const rankCounts={};
+  allMatches.forEach(m=>{
+    if(m.avgRank==null)return;
+    const t=Math.round(m.avgRank);
+    rankCounts[t]=(rankCounts[t]||0)+1;
+  });
+  const breakdown=document.getElementById('sg-rank-breakdown');
+  breakdown.innerHTML='';
+  // Show in descending order (highest rank first)
+  Object.keys(rankCounts).map(Number).sort((a,b)=>b-a).forEach(t=>{
+    const count=rankCounts[t];
+    if(!count||t<3)return;
+    const item=document.createElement('div');
+    item.className='rb-item';
+    item.innerHTML=`<span class="rb-dot" style="background:${rColor(t)}"></span>${RANK_MAP[t]||t} <span class="rb-count">${count}</span>`;
+    breakdown.appendChild(item);
+  });
+  document.getElementById('sg-kd').textContent=avgKD!=null?avgKD:'—';
+  document.getElementById('sg-kd-sub').textContent=`over ${statGames.length} games`;
+
+  computePeakRank();
+
+  document.getElementById('summary-grid').style.display='grid';
+  renderCharts();
+  document.getElementById('match-list-section').style.display='block';
+  renderTeammates();
+
+  // Populate rank filter buttons based on what ranks actually appear in the data
+  const RANK_GROUP_DEFS=[
+    {label:'Iron',  tiers:[3,4,5], color:rColor(3)},
+    {label:'Bronze',tiers:[6,7,8], color:rColor(6)},
+    {label:'Silver',tiers:[9,10,11],color:rColor(9)},
+    {label:'Gold',  tiers:[12,13,14],color:rColor(12)},
+    {label:'Plat',  tiers:[15,16,17],color:rColor(15)},
+    {label:'Diamond',tiers:[18,19,20],color:rColor(18)},
+    {label:'Asc',   tiers:[21,22,23],color:rColor(21)},
+    {label:'Imm',   tiers:[24,25,26],color:rColor(24)},
+    {label:'Radiant',tiers:[27],    color:rColor(27)},
+  ];
+  const rankGroup=document.getElementById('rank-filter-group');
+  // keep the label, remove old buttons
+  rankGroup.querySelectorAll('.filter-btn').forEach(b=>b.remove());
+  RANK_GROUP_DEFS.forEach(g=>{
+    const hasMatches=allMatches.some(m=>m.avgRank!=null&&g.tiers.includes(Math.round(m.avgRank)));
+    if(!hasMatches)return;
+    const btn=document.createElement('button');
+    btn.className='filter-btn';
+    btn.style.cssText=`border-left:3px solid ${g.color};`;
+    btn.textContent=g.label;
+    btn.onclick=(e)=>setRankFilter(g.label,e);
+    rankGroup.appendChild(btn);
+  });
+
+  // Populate party size filter buttons
+  const partyGroup=document.getElementById('party-filter-group');
+  partyGroup.querySelectorAll('.filter-btn').forEach(b=>b.remove());
+  const PARTY_LABELS={1:'Solo',2:'Duo',3:'Trio',4:'Quad',5:'5-Stack'};
+  const partySizes=[...new Set(allMatches.map(m=>m.partySize||1))].sort((a,b)=>a-b);
+  partySizes.forEach(sz=>{
+    const btn=document.createElement('button');
+    btn.className='filter-btn';
+    btn.textContent=PARTY_LABELS[sz]||`${sz}-stack`;
+    btn.onclick=(e)=>setPartyFilter(sz,e);
+    partyGroup.appendChild(btn);
+  });
+  setStatus(`${n} matches loaded · click a match to expand`,false);
+  renderPage();
+}
+
+async function computePeakRank(){
+  // Step 1: find peak tier from match data (v4 matches have tier but no RR)
+  const valid=allMatches.filter(m=>m.myTierId>=3);
+  if(!valid.length){
+    document.getElementById('sg-peakrr').textContent='—';
+    document.getElementById('sg-peakrr-sub').textContent='no data';
+    return;
+  }
+
+  const peakTierId=Math.max(...valid.map(m=>m.myTierId));
+  const peakTierName=valid.find(m=>m.myTierId===peakTierId).myTierName;
+
+  // Show tier immediately, then try to get RR
+  const peakEl=document.getElementById('sg-peakrr');
+  peakEl.textContent=peakTierName;
+  peakEl.classList.toggle('small',peakTierName.length>8);
+  document.getElementById('sg-peakrr-sub').textContent='this act';
+
+  // Step 2: if Immortal+, fetch mmr-history to get the peak RR for that tier
+  if(peakTierId<24)return;
+  try{
+    const url=`https://api.henrikdev.xyz/valorant/v1/mmr-history/${REGION}/${encodeURIComponent(PLAYER)}/${TAG}?size=100`;
+    const{j}=await fetchWithRetry(url);
+    const all=j.data||[];
+    console.log('[mmr-history] total entries:',all.length,'| peakTierId:',peakTierId);
+    if(all.length) console.log('[mmr-history] sample keys:',Object.keys(all[0]),'| sample currenttier:',all[0].currenttier,'| ranking_in_tier:',all[0].ranking_in_tier,'| season_id:',all[0].season_id);
+
+    // Filter to target season
+    let entries=all;
+    if(TARGET_SEASON){
+      const bySeason=all.filter(e=>{
+        const sid=e.season_id||'';
+        return sid===TARGET_SEASON||sid.includes(TARGET_SEASON.slice(0,8));
+      });
+      entries=bySeason.length>0?bySeason:all;
+      console.log('[mmr-history] after season filter:',entries.length,'(bySeason had:',bySeason.length,')');
+    }
+
+    // mmr-history only returns last 20 entries — may not reach back to peak tier games
+    // Try to find any Imm+ entry; if none, fall back to v2/mmr which has highest_rank for the act
+    const immEntries=entries.filter(e=>(e.currenttier??0)>=24);
+    console.log('[mmr-history] immEntries:',immEntries.length,'tiers:',entries.map(e=>e.currenttier));
+
+    if(immEntries.length){
+      const best=immEntries.reduce((b,e)=>{
+        const eScore=(e.currenttier??0)*100+(e.ranking_in_tier??0);
+        const bScore=(b.currenttier??0)*100+(b.ranking_in_tier??0);
+        return eScore>bScore?e:b;
+      },immEntries[0]);
+      const bestRR=best.ranking_in_tier??0;
+      console.log('[mmr-history] best from history:',best.currenttier,bestRR,'RR');
+      if(bestRR>0){
+        const bestTierId=best.currenttier??0;
+        if(bestTierId>peakTierId){
+          const peakEl=document.getElementById('sg-peakrr');
+          peakEl.textContent=best.currenttierpatched??rName(bestTierId);
+          peakEl.classList.toggle('small',(best.currenttierpatched??'').length>8);
+        }
+        document.getElementById('sg-peakrr-sub').textContent=`${bestRR} RR`;
+        return;
+      }
+    }
+
+    // Fallback: v2/mmr has highest_rank for the act
+    // mmr-history capped at 20 — fall back to v2/mmr highest_rank for tier (no RR available)
+    const mmrUrl=`https://api.henrikdev.xyz/valorant/v2/mmr/${REGION}/${encodeURIComponent(PLAYER)}/${TAG}`;
+    const{j:j2}=await fetchWithRetry(mmrUrl);
+    const d=j2.data||j2;
+    const peakTierIdV2=d.highest_rank?.tier??null;
+    const peakNameV2=d.highest_rank?.patched_tier??null;
+    // Only use v2/mmr result if it's a higher tier than what match data found
+    if(peakTierIdV2!=null&&peakTierIdV2>peakTierId){
+      const peakEl=document.getElementById('sg-peakrr');
+      peakEl.textContent=peakNameV2??rName(peakTierIdV2);
+      peakEl.classList.toggle('small',(peakNameV2??'').length>8);
+    }
+    // RR not available from this endpoint — sub-label stays as 'this act'
+  }catch(e){
+    console.error('[mmr-history] error:',e);
+  }
+}
+
+/* ── TEAMMATES ───────────────────────────────────────────── */
+function renderTeammates(){
+  const tmap={};
+  allMatches.forEach(m=>{
+    if(!m.myStats)return;
+    const myTeam=m.players.filter(p=>p.team_id===m.players.find(q=>
+      PUUID?q.puuid===PUUID:q.name?.toLowerCase()===PLAYER.toLowerCase()
+    )?.team_id);
+    myTeam.forEach(p=>{
+      if(PUUID?p.puuid===PUUID:p.name?.toLowerCase()===PLAYER.toLowerCase())return;
+      // Only count players who were in the same party (duo/trio/5-stack)
+      if(!m.myPartyId||p.party_id!==m.myPartyId)return;
+      const key=p.puuid||`${p.name}#${p.tag}`;
+      if(!tmap[key])tmap[key]={name:p.name,tag:p.tag,games:0,wins:0,kills:0,deaths:0};
+      tmap[key].games++;
+      if(m.won===true)tmap[key].wins++;
+      tmap[key].kills+=p._kills||0;
+      tmap[key].deaths+=p._deaths||0;
+    });
+  });
+
+  const top5=Object.values(tmap)
+    .sort((a,b)=>b.games-a.games)
+    .slice(0,5);
+
+  if(!top5.length){document.getElementById('teammates-section').style.display='none';return;}
+
+  document.getElementById('teammates-section').style.display='block';
+  const list=document.getElementById('teammate-list');
+  list.innerHTML='';
+  top5.forEach((t,i)=>{
+    const kd=t.deaths>0?(t.kills/t.deaths).toFixed(2):t.kills.toFixed(2);
+    const wr=Math.round(t.wins/t.games*100);
+    const kdClass=parseFloat(kd)>1?'tm-kd-good':parseFloat(kd)<1?'tm-kd-bad':'tm-kd-mid';
+    const row=document.createElement('div');
+    row.className='teammate-row';
+    row.innerHTML=`
+      <span class="tm-rank">#${i+1}</span>
+      <span><span class="tm-name">${t.name}</span><span class="tm-tag">#${t.tag}</span></span>
+      <div class="tm-stat"><div class="tm-stat-val">${t.games}</div><div class="tm-stat-lbl">Games</div></div>
+      <div class="tm-stat"><div class="tm-stat-val ${kdClass}">${kd}</div><div class="tm-stat-lbl">K/D</div></div>
+      <div class="tm-stat"><div class="tm-stat-val" style="color:${wr>=50?'#22c55e':'#ef4444'}">${wr}%</div><div class="tm-stat-lbl">Win Rate</div></div>
+    `;
+    list.appendChild(row);
+  });
+}
+
+/* ── CHARTS ──────────────────────────────────────────────── */
+function destroyCharts(){
+  Object.values(chartInstances).forEach(c=>c.destroy());
+  Object.keys(chartInstances).forEach(k=>delete chartInstances[k]);
+}
+
+function renderCharts(){
+  const container=document.getElementById('charts-container');
+  destroyCharts();container.innerHTML='';
+
+  const valid=allMatches.filter(m=>m.myStats&&m.avgRank!=null);
+  if(!valid.length)return;
+
+  // Group by rounded avg lobby rank tier
+  const brackets={};
+  valid.forEach(m=>{
+    const t=Math.round(m.avgRank);
+    if(!brackets[t])brackets[t]={totalKills:0,totalDeaths:0,wins:0,total:0};
+    brackets[t].total++;
+    if(m.won===true)brackets[t].wins++;
+    if(m.myStats.kills!=null)brackets[t].totalKills+=m.myStats.kills;
+    if(m.myStats.deaths!=null)brackets[t].totalDeaths+=m.myStats.deaths;
+  });
+
+  const tiers=Object.keys(brackets).map(Number).sort((a,b)=>a-b);
+  if(tiers.length<2){document.getElementById('charts-section').style.display='none';return;}
+
+  const labels=tiers.map(t=>RANK_MAP[t]||String(t));
+  const avgKDs=tiers.map(t=>{
+    const b=brackets[t];
+    return b.totalDeaths>0?+(b.totalKills/b.totalDeaths).toFixed(2):b.totalKills>0?b.totalKills:null;
+  });
+  const counts=tiers.map(t=>brackets[t].total);
+  const winRates=tiers.map(t=>Math.round(brackets[t].wins/brackets[t].total*100));
+
+  const wrap=document.createElement('div');
+  wrap.className='chart-container';
+  wrap.style.padding='1.5rem';
+  const heading=document.createElement('div');
+  heading.className='chart-heading';
+  heading.textContent='Avg K/D by Avg Lobby Rank';
+  const cw=document.createElement('div');
+  cw.className='chart-canvas-wrap';cw.style.height='300px';
+  const canvas=document.createElement('canvas');
+  cw.appendChild(canvas);
+  wrap.appendChild(heading);wrap.appendChild(cw);
+  container.appendChild(wrap);
+  document.getElementById('charts-section').style.display='block';
+
+  chartInstances['kdbyrank']=new Chart(canvas,{
+    type:'bar',
+    data:{
+      labels,
+      datasets:[
+        {
+          label:'Avg K/D',
+          data:avgKDs,
+          backgroundColor:avgKDs.map(v=>v==null?'transparent':v>1?'rgba(34,197,94,.65)':v<1?'rgba(239,68,68,.6)':'rgba(156,163,175,.5)'),
+          borderColor:avgKDs.map(v=>v==null?'transparent':v>1?'rgba(34,197,94,.9)':v<1?'rgba(239,68,68,.85)':'rgba(156,163,175,.8)'),
+          borderWidth:1,
+          borderRadius:5,
+          borderSkipped:false,
+        }
+      ]
+    },
+    options:{
+      responsive:true,
+      maintainAspectRatio:false,
+      clip:false,
+      layout:{padding:{bottom:58}},
+      plugins:{
+        legend:{display:false},
+        tooltip:{enabled:false}
+      },
+      scales:{
+        x:{
+          grid:{display:false},
+          ticks:{display:false},
+          border:{display:false},
+        },
+        y:{
+          grid:{display:false},
+          ticks:{display:false},
+          border:{display:false},
+        }
+      }
+    },
+    plugins:[{
+      id:'barLabels',
+      afterDraw(chart){
+        const c=chart.ctx;
+        const meta=chart.getDatasetMeta(0);
+        meta.data.forEach((bar,i)=>{
+          const val=chart.data.datasets[0].data[i];
+          if(val==null)return;
+          const t=tiers[i];
+          const b=brackets[t];
+          const wr=winRates[i];
+          const barH=Math.abs(bar.base-bar.y);
+
+          // K/D inside bar
+          c.save();
+          c.font='700 13px \'Rajdhani\',sans-serif';
+          c.fillStyle='rgba(255,255,255,.92)';
+          c.textAlign='center';
+          c.textBaseline='middle';
+          if(barH>18) c.fillText(val.toFixed(2),bar.x,(bar.y+bar.base)/2);
+          else{ c.fillStyle='rgba(255,255,255,.7)'; c.fillText(val.toFixed(2),bar.x,bar.y-10); }
+          c.restore();
+
+          // Below axis: rank label, win rate, games
+          const base=bar.base;
+          c.save();
+          c.textAlign='center';
+          c.textBaseline='top';
+
+          // Rank name — coloured by rank
+          c.font='bold 10px \'JetBrains Mono\',monospace';
+          c.fillStyle='#9ca3af';
+          c.fillText(labels[i],bar.x,base+8);
+
+          // Win rate — green if >=50, red if <50
+          c.font='700 13px \'Rajdhani\',sans-serif';
+          c.fillStyle=wr>=50?'#22c55e':'#ef4444';
+          c.fillText(wr+'%',bar.x,base+22);
+
+          // Game count
+          c.font='10px \'JetBrains Mono\',monospace';
+          c.fillStyle='#6b7280';
+          c.fillText(b.total+' matches',bar.x,base+36);
+          c.restore();
+        });
+      }
+    }]
+  });
+
+  // K/D by player rank chart
+  const rankValid=allMatches.filter(m=>m.myStats&&m.myTierId>=3);
+  if(rankValid.length){
+    const rb={};
+    rankValid.forEach(m=>{
+      const t=m.myTierId;
+      if(!rb[t])rb[t]={totalKills:0,totalDeaths:0,wins:0,total:0,name:m.myTierName};
+      rb[t].total++;
+      if(m.won===true)rb[t].wins++;
+      if(m.myStats.kills!=null)rb[t].totalKills+=m.myStats.kills;
+      if(m.myStats.deaths!=null)rb[t].totalDeaths+=m.myStats.deaths;
+    });
+
+    const rTiers=Object.keys(rb).map(Number).sort((a,b)=>a-b);
+    const rLabels=rTiers.map(t=>rb[t].name);
+    const rKDs=rTiers.map(t=>{
+      const b=rb[t];
+      return b.totalDeaths>0?+(b.totalKills/b.totalDeaths).toFixed(2):b.totalKills>0?b.totalKills:null;
+    });
+    const rWRs=rTiers.map(t=>Math.round(rb[t].wins/rb[t].total*100));
+
+    const rw=document.createElement('div');
+    rw.className='chart-container';
+    rw.style.padding='1.5rem';
+    const rh=document.createElement('div');
+    rh.className='chart-heading';rh.textContent='Avg K/D by Player Rank';
+    const rcw=document.createElement('div');
+    rcw.className='chart-canvas-wrap';
+    const rc=document.createElement('canvas');
+    rcw.appendChild(rc);rw.appendChild(rh);rw.appendChild(rcw);
+    container.appendChild(rw);
+
+    chartInstances['kdbyplayerrank']=new Chart(rc,{
+      type:'bar',
+      data:{
+        labels:rLabels,
+        datasets:[{
+          label:'Avg K/D',
+          data:rKDs,
+          backgroundColor:rKDs.map(v=>v==null?'transparent':v>1?'rgba(34,197,94,.65)':v<1?'rgba(239,68,68,.6)':'rgba(156,163,175,.5)'),
+          borderColor:rKDs.map(v=>v==null?'transparent':v>1?'rgba(34,197,94,.9)':v<1?'rgba(239,68,68,.85)':'rgba(156,163,175,.8)'),
+          borderWidth:1,borderRadius:5,borderSkipped:false,
+        }]
+      },
+      options:{
+        responsive:true,maintainAspectRatio:false,
+        clip:false,
+        layout:{padding:{bottom:58}},
+        plugins:{
+          legend:{display:false},
+          tooltip:{enabled:false}
+        },
+        scales:{
+          x:{grid:{display:false},ticks:{display:false},border:{display:false}},
+          y:{grid:{display:false},ticks:{display:false},border:{display:false}}
+        }
+      },
+      plugins:[{
+        id:'barLabels',
+        afterDraw(chart){
+          const c=chart.ctx;
+          chart.data.datasets.forEach((ds,di)=>{
+            chart.getDatasetMeta(di).data.forEach((bar,i)=>{
+              const val=ds.data[i];
+              if(val==null)return;
+              const barHeight=Math.abs(bar.base-bar.y);
+              c.save();
+              c.font='700 13px \'Rajdhani\',sans-serif';
+              c.textAlign='center';
+              if(barHeight>18){
+                c.fillStyle='rgba(255,255,255,.92)';
+                c.textBaseline='middle';
+                c.fillText(val.toFixed(2),bar.x,(bar.y+bar.base)/2);
+              } else {
+                c.fillStyle='rgba(255,255,255,.7)';
+                c.textBaseline='bottom';
+                c.fillText(val.toFixed(2),bar.x,bar.y-4);
+              }
+              // Rank label
+              c.font='700 11px \'JetBrains Mono\',monospace';
+              c.fillStyle='#9ca3af';
+              c.textBaseline='top';
+              c.fillText(rLabels[i],bar.x,chart.chartArea.bottom+8);
+              // Win rate
+              const wr=rWRs[i];
+              c.font='700 11px \'Rajdhani\',sans-serif';
+              c.fillStyle=wr>=50?'rgba(34,197,94,.9)':'rgba(239,68,68,.85)';
+              c.fillText(wr+'% WR',bar.x,chart.chartArea.bottom+24);
+              // Matches
+              c.font='11px \'JetBrains Mono\',monospace';
+              c.fillStyle='rgba(156,163,175,.7)';
+              c.fillText(rb[rTiers[i]].total+' matches',bar.x,chart.chartArea.bottom+40);
+              c.restore();
+            });
+          });
+        }
+      }]
+    });
+  }
+
+  // K/D by party size chart
+  const partyValid=allMatches.filter(m=>m.myStats);
+  if(partyValid.length){
+    const pb={};
+    partyValid.forEach(m=>{
+      const sz=m.partySize||1;
+      if(!pb[sz])pb[sz]={totalKills:0,totalDeaths:0,wins:0,total:0};
+      pb[sz].total++;
+      if(m.won===true)pb[sz].wins++;
+      if(m.myStats.kills!=null)pb[sz].totalKills+=m.myStats.kills;
+      if(m.myStats.deaths!=null)pb[sz].totalDeaths+=m.myStats.deaths;
+    });
+
+    const pSizes=Object.keys(pb).map(Number).sort((a,b)=>a-b);
+    const pLabels=pSizes.map(s=>s===1?'Solo':s===2?'Duo':s===3?'Trio':s===4?'Quad':'5-Stack');
+    const pKDs=pSizes.map(s=>{
+      const b=pb[s];
+      return b.totalDeaths>0?+(b.totalKills/b.totalDeaths).toFixed(2):b.totalKills>0?b.totalKills:null;
+    });
+    const pWRs=pSizes.map(s=>Math.round(pb[s].wins/pb[s].total*100));
+
+    const pw=document.createElement('div');
+    pw.className='chart-container';
+    pw.style.padding='1.5rem';
+    const ph=document.createElement('div');
+    ph.className='chart-heading';ph.textContent='Avg K/D by Party Size';
+    const pcw=document.createElement('div');
+    pcw.className='chart-canvas-wrap';pcw.style.height='260px';
+    const pc=document.createElement('canvas');
+    pcw.appendChild(pc);pw.appendChild(ph);pw.appendChild(pcw);
+    container.appendChild(pw);
+
+    chartInstances['kdbyparty']=new Chart(pc,{
+      type:'bar',
+      data:{
+        labels:pLabels,
+        datasets:[
+          {
+            label:'Avg K/D',
+            data:pKDs,
+            backgroundColor:pKDs.map(v=>v==null?'transparent':v>1?'rgba(34,197,94,.65)':v<1?'rgba(239,68,68,.6)':'rgba(156,163,175,.5)'),
+            borderColor:pKDs.map(v=>v==null?'transparent':v>1?'rgba(34,197,94,.9)':v<1?'rgba(239,68,68,.85)':'rgba(156,163,175,.8)'),
+            borderWidth:1,borderRadius:5,borderSkipped:false,
+          }
+        ]
+      },
+      options:{
+        responsive:true,maintainAspectRatio:false,
+        clip:false,
+        layout:{padding:{bottom:58}},
+        plugins:{
+          legend:{display:false},
+          tooltip:{enabled:false}
+        },
+        scales:{
+          x:{grid:{display:false},ticks:{display:false},border:{display:false}},
+          y:{grid:{display:false},ticks:{display:false},border:{display:false}}
+        }
+      },
+    plugins:[{
+      id:'barLabels',
+      afterDraw(chart){
+        const c=chart.ctx;
+        const meta=chart.getDatasetMeta(0);
+        meta.data.forEach((bar,i)=>{
+          const val=chart.data.datasets[0].data[i];
+          if(val==null)return;
+          const s=pSizes[i];
+          const b=pb[s];
+          const wr=pWRs[i];
+          const barH=Math.abs(bar.base-bar.y);
+
+          // K/D inside bar
+          c.save();
+          c.font='700 13px \'Rajdhani\',sans-serif';
+          c.fillStyle='rgba(255,255,255,.92)';
+          c.textAlign='center';
+          c.textBaseline='middle';
+          if(barH>18) c.fillText(val.toFixed(2),bar.x,(bar.y+bar.base)/2);
+          else{ c.fillStyle='rgba(255,255,255,.7)'; c.fillText(val.toFixed(2),bar.x,bar.y-10); }
+          c.restore();
+
+          // Below axis: party label, win rate, games
+          const base=bar.base;
+          c.save();
+          c.textAlign='center';
+          c.textBaseline='top';
+
+          // Party label
+          c.font='700 13px \'Rajdhani\',sans-serif';
+          c.fillStyle='#9ca3af';
+          c.fillText(pLabels[i],bar.x,base+8);
+
+          // Win rate
+          c.font='bold 12px \'JetBrains Mono\',monospace';
+          c.fillStyle=wr>=50?'#22c55e':'#ef4444';
+          c.fillText(wr+'%',bar.x,base+23);
+
+          // Game count
+          c.font='10px \'JetBrains Mono\',monospace';
+          c.fillStyle='#6b7280';
+          c.fillText(b.total+' matches',bar.x,base+38);
+          c.restore();
+        });
+      }
+    }]
+    });
+  }
+}
+
+/* ── MATCH LIST ──────────────────────────────────────────── */
+function setStatus(msg,spin=false){
+  document.getElementById('status-text').textContent=msg;
+  document.getElementById('spinner').style.display=spin?'block':'none';
+}
+function setProgress(pct){document.getElementById('progress-fill').style.width=Math.min(pct,100)+'%';}
+
+function setResultFilter(f,e){
+  activeFilter=f;page=0;
+  document.querySelectorAll('#filter-bar .filter-group:first-child .filter-btn').forEach(b=>b.classList.remove('active'));
+  if(e?.target)e.target.classList.add('active');
+  renderPage();
+}
+function setRankFilter(f,e){
+  activeRankFilter=activeRankFilter===f?null:f;page=0;
+  document.querySelectorAll('#rank-filter-group .filter-btn').forEach(b=>b.classList.remove('active'));
+  if(activeRankFilter!=null&&e?.target)e.target.classList.add('active');
+  renderPage();
+}
+function setPartyFilter(f,e){
+  activePartyFilter=activePartyFilter===f?null:f;page=0;
+  document.querySelectorAll('#party-filter-group .filter-btn').forEach(b=>b.classList.remove('active'));
+  if(activePartyFilter!=null&&e?.target)e.target.classList.add('active');
+  renderPage();
+}
+// Keep old setFilter as alias for backward compat
+function setFilter(f,e){setResultFilter(f,e);}
+function filtered(){
+  let out=allMatches;
+  if(activeFilter==='win')out=out.filter(m=>m.won===true);
+  else if(activeFilter==='loss')out=out.filter(m=>m.won===false);
+  if(activeRankFilter!=null){
+    const RANK_GROUPS_FILTER={
+      'Iron':[3,4,5],'Bronze':[6,7,8],'Silver':[9,10,11],'Gold':[12,13,14],
+      'Plat':[15,16,17],'Diamond':[18,19,20],'Asc':[21,22,23],'Imm':[24,25,26],'Radiant':[27]
+    };
+    const tiers=RANK_GROUPS_FILTER[activeRankFilter]||[];
+    out=out.filter(m=>m.avgRank!=null&&tiers.includes(Math.round(m.avgRank)));
+  }
+  if(activePartyFilter!=null)out=out.filter(m=>(m.partySize||1)===activePartyFilter);
+  return out;
+}
+
+function renderPage(){
+  const data=filtered();
+  const slice=data.slice(page*PER_PAGE,(page+1)*PER_PAGE);
+  const el=document.getElementById('matches-container');
+  el.innerHTML='';
+  if(!slice.length){el.innerHTML='<div class="empty">No matches.</div>';document.getElementById('page-nav').style.display='none';return;}
+
+  const list=document.createElement('div');list.className='matches';
+  slice.forEach(({mapName,startedAt,players,won,myR,opR,avgRank,myStats})=>{
+    const rc=won===true?'win':won===false?'loss':'draw';
+    const rt=won===true?'Win':won===false?'Loss':'Draw';
+    const score=(myR!=null&&opR!=null)?`${myR}–${opR}`:'—';
+
+    const sorted=[...players].sort((a,b)=>(b._tier??0)-(a._tier??0));
+    const pills=sorted.map(p=>{
+      const isMe=PUUID?p.puuid===PUUID:p.name?.toLowerCase()===PLAYER.toLowerCase()&&p.tag?.toLowerCase()===TAG.toLowerCase();
+      return `<div class="player-row${isMe?' is-me':''}">
+        <span class="player-name" title="${p.name}#${p.tag}">${p.name}</span>
+        <span class="player-rank-txt ${rClass(p._tier)}">${p._label}</span>
+      </div>`;
+    }).join('');
+
+    // My stats row
+    let statsHtml='';
+    if(myStats){
+      const items=[
+        {l:'K/D',v:myStats.kd?.toFixed(2)??'—'},
+        {l:'K',v:myStats.kills??'—'},
+        {l:'D',v:myStats.deaths??'—'},
+        {l:'A',v:myStats.assists??'—'},
+        myStats.acs!=null?{l:'ACS',v:myStats.acs}:null,
+        myStats.adr!=null?{l:'ADR',v:myStats.adr}:null,
+        myStats.hsPct!=null?{l:'HS%',v:myStats.hsPct+'%'}:null,
+      ].filter(Boolean);
+      statsHtml=`<div class="my-stats-row">${items.map(i=>`<div class="my-stat"><div class="my-stat-lbl">${i.l}</div><div class="my-stat-val">${i.v}</div></div>`).join('')}</div>`;
+    }
+
+    const card=document.createElement('div');
+    card.className='match-card';
+    card.innerHTML=`
+      <div class="match-row">
+        <div class="result-bar ${rc}"></div>
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <span class="match-map">${mapName}</span>
+            <span class="m-result-tag ${rc}">${rt}</span>
+            <span class="match-score">${score}</span>
+            <span class="match-date">${startedAt}</span>
+          </div>
+        </div>
+        <div class="m-badges">
+          <div class="m-badge">
+            <div class="m-badge-lbl">avg lobby</div>
+            <div class="m-badge-val ${avgRank!=null?rClass(Math.round(avgRank)):''}">${avgRank!=null?avgLabel(avgRank):'—'}</div>
+          </div>
+        </div>
+      </div>
+      ${statsHtml}
+      <div class="players-grid">${pills}</div>`;
+    card.addEventListener('click',()=>card.classList.toggle('expanded'));
+    list.appendChild(card);
+  });
+  el.appendChild(list);
+
+  const total=data.length,pages=Math.ceil(total/PER_PAGE);
+  const nav=document.getElementById('page-nav');
+  if(pages>1){
+    nav.style.display='flex';
+    document.getElementById('page-info').textContent=`Page ${page+1} of ${pages}`;
+    const ji=document.getElementById('page-jump-input');
+    ji.max=pages;ji.placeholder=`1–${pages}`;ji.value='';
+    document.getElementById('btn-prev').disabled=page===0;
+    document.getElementById('btn-next').disabled=page>=pages-1;
+  }else{nav.style.display='none';}
+}
+
+function changePage(dir){page+=dir;renderPage();window.scrollTo({top:0,behavior:'smooth'});}
+function jumpToPage(val){
+  const pages=Math.ceil(filtered().length/PER_PAGE);
+  const n=parseInt(val);
+  if(isNaN(n))return;
+  page=Math.max(0,Math.min(n-1,pages-1));
+  document.getElementById('page-jump-input').value='';
+  renderPage();
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+</script>
+</body>
+</html>
